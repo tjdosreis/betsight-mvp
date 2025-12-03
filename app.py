@@ -4,103 +4,155 @@ from src.data_loader import DataLoader
 from src.model import BetModel
 from src.finance import RiskManager
 
-# --- CONFIGURAÇÃO ---
-st.set_page_config(page_title="BetSight MVP", layout="wide", page_icon="🎯")
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(
+    page_title="BetSight Intelligence", 
+    layout="wide", 
+    page_icon="🎯",
+    initial_sidebar_state="expanded"
+)
 
-# --- CSS (Estilo Visual) ---
+# --- ESTILIZAÇÃO (CSS) ---
 st.markdown("""
 <style>
-    .metric-card { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b; }
-    .success-msg { color: #00cc00; font-weight: bold; font-size: 18px; }
-    .error-msg { color: #ff3333; font-weight: bold; font-size: 18px; }
-    .warning-msg { color: #ffa500; font-weight: bold; }
+    .reportview-container { background: #fdfdfd; }
+    .sidebar .sidebar-content { background: #f0f2f6; }
+    .metric-container { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .legal-text { font-size: 12px; color: #666; text-align: justify; }
+    .big-money { font-size: 26px; font-weight: bold; color: #2e7bcf; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO ---
-st.title("🎯 BetSight Intelligence")
-st.caption("Sprint 1: System v1.0 | Quarter Kelly Strategy Active")
-
-# --- SIDEBAR (CONTROLES DO CFO) ---
-st.sidebar.header("💰 Parâmetros do CFO")
-bankroll = st.sidebar.number_input("Banca Total ($)", value=1000.0, step=100.0)
-kelly_fraction = st.sidebar.slider("Kelly Fraction", 0.1, 0.5, 0.25, help="Padrão: 0.25 (Quarter Kelly)")
-max_cap = st.sidebar.slider("Hard Cap (Teto Máximo)", 0.01, 0.10, 0.05, format="%.2f", help="Máximo por aposta: 5%")
-
-# --- CARGA DE DADOS & TREINO ---
-with st.spinner("Inicializando IA e Carregando Dados..."):
+# --- CARGA DE DADOS & IA (BACKGROUND) ---
+# O usuário não vê isso, mas garante que o sistema esteja vivo
+with st.spinner("🔄 Conectando ao Neural Core..."):
     df = DataLoader.load_data()
     ai_engine = BetModel()
-    
     if not df.empty:
         model_acc, baseline_acc, test_season = ai_engine.train_model(df)
     else:
-        st.error("Erro crítico: Base de dados vazia.")
+        st.error("Falha crítica na conexão de dados.")
         st.stop()
 
-# --- PAINEL DE PERFORMANCE ---
-st.subheader(f"⚔️ Validação do Modelo (Temporada {test_season})")
-c1, c2, c3 = st.columns(3)
-c1.metric("Acurácia IA", f"{model_acc:.1%}")
-c2.metric("Baseline (Mandante)", f"{baseline_acc:.1%}")
-diff = model_acc - baseline_acc
-c3.metric("Edge do Modelo", f"{diff:+.1%}", delta_color="normal" if diff > 0 else "inverse")
+# --- SIDEBAR: PAINEL DE CONTROLE ---
+st.sidebar.header("⚙️ Parâmetros do Confronto")
+
+# 1. Seleção de Times
+teams = sorted(df['HomeTeam'].unique())
+home_team = st.sidebar.selectbox("Mandante (Casa)", teams, index=0, placeholder="Escolha o time...")
+away_team = st.sidebar.selectbox("Visitante (Fora)", teams, index=1, placeholder="Escolha o time...")
+
+# 2. Odds (Mercado)
+st.sidebar.markdown("### Odds do Mercado")
+c1, c2, c3 = st.sidebar.columns(3)
+odds_h = c1.number_input("Casa", 1.01, 50.0, 2.00)
+odds_d = c2.number_input("Empate", 1.01, 50.0, 3.40)
+odds_a = c3.number_input("Fora", 1.01, 50.0, 4.00)
+
+st.sidebar.markdown("---")
+
+# 3. Gestão de Banca (CFO)
+st.sidebar.header("💰 Gestão de Risco")
+bankroll = st.sidebar.number_input("Banca Disponível ($)", value=1000.0, step=50.0)
+kelly_fraction = st.sidebar.slider("Agressividade (Kelly)", 0.1, 0.5, 0.25)
+max_cap = st.sidebar.slider("Trava de Segurança (Cap)", 0.01, 0.10, 0.05, format="%.2f")
+
+# 4. BOTÃO DE AÇÃO (CTA)
+run_analysis = st.sidebar.button("Analisar Probabilidades", type="primary", use_container_width=True)
+
+# --- INTERFACE PRINCIPAL ---
+
+# H1 & H2 & Intro
+st.title("BetSight Intelligence")
+st.subheader("Análise Preditiva da Premier League")
+st.write("Transformando dados históricos em vantagem estatística. Configure o confronto no menu lateral para iniciar a varredura.")
+
+# Métricas de Validação (Prova Social Técnica)
+with st.container():
+    st.markdown(f"#### 🛡️ Status do Modelo (Temporada {test_season})")
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("Precisão do Algoritmo", f"{model_acc:.1%}")
+    col_m2.metric("Baseline de Mercado", f"{baseline_acc:.1%}")
+    diff = model_acc - baseline_acc
+    col_m3.metric("Alpha (Vantagem)", f"{diff:+.1%}", delta_color="normal")
 
 st.divider()
 
-# --- SIMULADOR DE APOSTAS ---
-col_sim, col_data = st.columns([1, 2])
-
-with col_sim:
-    st.markdown("### 🤖 Oportunidade de Mercado")
-    
-    # Inputs
-    teams = sorted(df['HomeTeam'].unique())
-    home_team = st.selectbox("Mandante", teams, index=0)
-    away_team = st.selectbox("Visitante", teams, index=1)
-    
-    cols_odds = st.columns(3)
-    odds_h = cols_odds[0].number_input("Odds Casa", 1.01, 50.0, 2.00)
-    odds_d = cols_odds[1].number_input("Odds Empate", 1.01, 50.0, 3.40)
-    odds_a = cols_odds[2].number_input("Odds Fora", 1.01, 50.0, 4.00)
-
-    if st.button("CALCULAR INVESTIMENTO", type="primary"):
-        # 1. Previsão da IA
-        probs = ai_engine.predict_match(home_team, away_team, odds_h, odds_d, odds_a)
-        p_home = probs['H']
-        
-        # 2. Decisão do CFO
-        decision = RiskManager.calculate_stake(
-            probability=p_home, 
-            odds=odds_h, 
-            bankroll=bankroll, 
-            fraction=kelly_fraction, 
-            max_cap=max_cap
-        )
-        
-        # 3. Output Visual
-        st.markdown("---")
-        
-        # Métricas Chave
-        k1, k2 = st.columns(2)
-        k1.metric("Probabilidade Real (IA)", f"{p_home:.1%}")
-        k2.metric("Valor Esperado (EV)", f"{decision['ev']:.2f}")
-        
-        st.markdown("#### 💸 Decisão Financeira")
-        
-        if decision['stake_val'] > 0:
-            st.markdown(f'<p class="success-msg">💎 APOSTAR: ${decision["stake_val"]:.2f}</p>', unsafe_allow_html=True)
-            st.write(f"Representa **{decision['stake_pct']}%** da sua banca.")
-            st.caption(f"Motivo: {decision['reason']}")
+# --- LÓGICA DE EXECUÇÃO ---
+if run_analysis:
+    # Validação de Lógica (NeuroCopy Req)
+    if home_team == away_team:
+        st.error("⚠️ Erro de Lógica: O time Mandante e Visitante não podem ser o mesmo.")
+    else:
+        # Feedback de Carregamento
+        with st.spinner("🔄 Processando 5 anos de dados históricos..."):
             
-            # Alerta se bateu no teto
-            if decision['stake_pct'] == (max_cap * 100):
-                st.warning(f"⚠️ Nota: O valor foi limitado pelo Hard Cap de {max_cap*100:.0f}%.")
+            # 1. Inteligência (Model)
+            probs = ai_engine.predict_match(home_team, away_team, odds_h, odds_d, odds_a)
+            p_home = probs['H']
+            
+            # 2. Finanças (CFO Risk Manager)
+            decision = RiskManager.calculate_stake(
+                probability=p_home,
+                odds=odds_h,
+                bankroll=bankroll,
+                fraction=kelly_fraction,
+                max_cap=max_cap
+            )
+            
+            # 3. Exibição do Relatório
+            st.success("✅ Análise concluída. Relatório gerado.")
+            
+            res_col1, res_col2 = st.columns([1, 1])
+            
+            with res_col1:
+                st.markdown("### 🧠 Inteligência Artificial")
+                st.write(f"Confronto: **{home_team}** vs **{away_team}**")
                 
-        else:
-            st.markdown(f'<p class="error-msg">⛔ {decision["reason"]}</p>', unsafe_allow_html=True)
-            st.write(f"Stake Recomendada: $0.00")
+                # Gráfico de barras simples para probabilidades
+                chart_data = pd.DataFrame({
+                    "Resultado": ["Casa", "Empate", "Visitante"],
+                    "Probabilidade": [probs['H'], probs['D'], probs['A']]
+                })
+                st.bar_chart(chart_data, x="Resultado", y="Probabilidade", color="#2e7bcf")
+                
+                st.info(f"Probabilidade Real Calculada: **{p_home:.1%}**")
 
-with col_data:
-    st.markdown("### 📋 Dados Históricos")
-    st.dataframe(df[['Date', 'HomeTeam', 'AwayTeam', 'FTR', 'B365H']].tail(15), use_container_width=True, hide_index=True)
+            with res_col2:
+                st.markdown("### 💸 Diretriz Financeira")
+                st.metric("Valor Esperado (EV)", f"{decision['ev']:.2f}")
+                
+                if decision['stake_val'] > 0:
+                    st.markdown(f"""
+                    <div style="padding: 15px; border: 1px solid #4CAF50; border-radius: 5px; background-color: #e8f5e9;">
+                        <span style="color: #2E7D32; font-weight: bold;">💎 OPORTUNIDADE DETECTADA</span><br>
+                        Aporte Sugerido: <span class="big-money">${decision['stake_val']:.2f}</span><br>
+                        <small>({decision['stake_pct']}% da Banca)</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.caption(f"Motivo: {decision['reason']}")
+                else:
+                    st.markdown(f"""
+                    <div style="padding: 15px; border: 1px solid #ef5350; border-radius: 5px; background-color: #ffebee;">
+                        <span style="color: #c62828; font-weight: bold;">⛔ ABORTAR OPERAÇÃO</span><br>
+                        Risco matemático superior ao benefício.
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.caption(f"Diagnóstico: {decision['reason']}")
+
+# --- HISTÓRICO RECENTE (Prova de Integridade) ---
+st.markdown("---")
+with st.expander("📋 Ver Dados Brutos (Auditoria)"):
+    st.dataframe(df.tail(10), use_container_width=True)
+
+# --- RODAPÉ DE COMPLIANCE (NeuroCopy Req) ---
+st.markdown("---")
+st.markdown("""
+<div class="legal-text">
+    <strong>⚖️ Aviso Legal & Responsabilidade</strong><br>
+    O BetSight é uma ferramenta estatística desenvolvida estritamente para fins informativos e de entretenimento. 
+    O desempenho passado não garante resultados futuros. Apostas esportivas envolvem alto risco financeiro e a possibilidade de perda total do capital.
+    Jogue com responsabilidade e apenas com valores que pode perder.<br><br>
+    🔞 <strong>Proibido para menores de 18 anos.</strong>
+</div>
+""", unsafe_allow_html=True)
