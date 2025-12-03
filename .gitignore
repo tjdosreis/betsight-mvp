@@ -1,0 +1,9 @@
+# Python internals
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Project Specific
+/data
+.DS_Store
