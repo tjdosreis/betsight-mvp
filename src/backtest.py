@@ -1,105 +1,125 @@
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
-from src.finance import RiskManager
 
 class Backtester:
     """
-    O Juiz Imparcial.
-    Simula o desempenho financeiro do modelo ao longo do tempo (Walk-Forward).
+    Motor de Auditoria Financeira (CFO Spec).
+    Simula Juros Compostos, Quarter Kelly e Drawdown.
     """
 
     @staticmethod
-    def run_walk_forward_simulation(df: pd.DataFrame, model_engine, initial_bankroll=1000.0):
+    def run_cfo_audit(df: pd.DataFrame, model_engine, initial_bankroll=1000.0):
         """
-        Percorre a temporada cronologicamente.
-        Para cada jogo, pergunta ao modelo e aplica a gestão do CFO.
+        Simulação Walk-Forward rigorosa.
         """
-        # Garante ordem cronológica
+        # Ordenação cronológica vital
         df = df.sort_values('Date').reset_index(drop=True)
-        
-        # Filtra apenas a temporada de teste (ex: 24/25) ou as últimas X rodadas
-        # Para o MVP, vamos pegar os últimos 50 jogos para ser rápido
-        test_slice = df.tail(50).copy()
+        # Pega amostra recente (ex: últimos 100 jogos) para performance recente
+        df = df.tail(100).copy()
         
         history = []
         current_bank = initial_bankroll
+        high_water_mark = initial_bankroll
         
-        # Log para o gráfico (Data vs Saldo)
-        equity_curve = [{'Date': test_slice.iloc[0]['Date'], 'Balance': current_bank}]
+        # Para gráfico inicial
+        equity_curve = [{'Date': df.iloc[0]['Date'], 'Bankroll': initial_bankroll, 'Drawdown_Pct': 0.0}]
 
-        for index, row in test_slice.iterrows():
-            # 1. Extrair dados do jogo
+        for idx, row in df.iterrows():
+            # 1. Dados
             odds_h = row['B365H']
-            odds_d = row['B365D']
             odds_a = row['B365A']
-            result = row['FTR'] # H, D, A
             
-            # 2. Previsão da IA (Simulando que não sabemos o resultado)
-            # Nota: O modelo já deve estar treinado com dados ANTERIORES a este jogo
-            probs = model_engine.predict_match(
-                row['HomeTeam'], row['AwayTeam'], odds_h, odds_d, odds_a
-            )
-            p_home = probs['H']
+            # 2. Previsão
+            probs = model_engine.predict_match(row['HomeTeam'], row['AwayTeam'], odds_h, odds_a)
+            prob_h = probs['H']
             
-            # 3. Decisão do CFO
-            decision = RiskManager.calculate_stake(
-                probability=p_home,
-                odds=odds_h,
-                bankroll=current_bank,
-                fraction=0.25, # Quarter Kelly fixo
-                max_cap=0.05
-            )
+            # 3. Lógica Financeira (CFO Risk Engine)
+            # Kelly Criterion Pura
+            b = odds_h - 1
+            if b <= 0: b = 0.01
+            p = prob_h
+            q = 1 - p
             
-            stake = decision['stake_val']
+            kelly_raw = ((b * p) - q) / b
             
-            # 4. Resolução da Aposta (A Verdade)
+            # Aplicação das Travas
+            stake_pct = 0.0
+            if kelly_raw > 0:
+                # Quarter Kelly
+                stake_pct = kelly_raw * 0.25
+                # Hard Cap 5%
+                if stake_pct > 0.05: stake_pct = 0.05
+            
+            # 4. Execução da Aposta
+            money_stake = current_bank * stake_pct
             profit_loss = 0.0
             outcome = "Skip"
             
-            if stake > 0:
-                if result == 'H': # Green
-                    profit_loss = (stake * odds_h) - stake
+            if money_stake > 0:
+                if row['FTR'] == 'H':
+                    profit_loss = money_stake * (odds_h - 1)
                     outcome = "Win"
-                else: # Red
-                    profit_loss = -stake
+                else:
+                    profit_loss = -money_stake
                     outcome = "Loss"
-                
-                # Atualiza Banca
-                current_bank += profit_loss
             
-            # 5. Registro (Audit Log)
+            current_bank += profit_loss
+            
+            # 5. Cálculo de Drawdown
+            if current_bank > high_water_mark:
+                high_water_mark = current_bank
+            
+            drawdown_val = high_water_mark - current_bank
+            drawdown_pct = 0.0
+            if high_water_mark > 0:
+                drawdown_pct = drawdown_val / high_water_mark
+
+            # 6. Log
             history.append({
                 'Date': row['Date'],
                 'Match': f"{row['HomeTeam']} vs {row['AwayTeam']}",
-                'Prediction_Prob': p_home,
+                'Model_Prob': prob_h,
                 'Odds': odds_h,
-                'Stake': stake,
-                'Result': result,
+                'Stake_Pct': stake_pct,
+                'Stake_Val': money_stake,
+                'Result': row['FTR'],
                 'Outcome': outcome,
                 'PnL': profit_loss,
-                'Bankroll': current_bank
+                'Bankroll': current_bank,
+                'Drawdown': drawdown_pct
             })
             
-            equity_curve.append({'Date': row['Date'], 'Balance': current_bank})
-
+            equity_curve.append({
+                'Date': row['Date'], 
+                'Bankroll': current_bank, 
+                'Drawdown_Pct': drawdown_pct
+            })
+            
         return pd.DataFrame(history), pd.DataFrame(equity_curve)
 
     @staticmethod
-    def plot_equity_curve(equity_df):
-        """Gera o gráfico da Curva de Capital."""
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=equity_df['Date'], 
-            y=equity_df['Balance'],
-            mode='lines+markers',
-            name='Saldo',
-            line=dict(color='#00cc00', width=3)
-        ))
-        fig.update_layout(
-            title="Curva de Equidade (Simulação Real)",
-            xaxis_title="Tempo",
-            yaxis_title="Banca (R$)",
-            template="plotly_white",
-            height=300
-        )
-        return fig
+    def plot_dashboard(equity_df):
+        """Gera os gráficos de Equity e Drawdown traduzidos."""
+        # Configuração de Labels para PT-BR
+        labels_pt = {
+            'Date': 'Data', 
+            'Bankroll': 'Banca (R$)', 
+            'Drawdown_Pct': 'Queda (%)'
+        }
+
+        # Gráfico 1: Equidade
+        fig_eq = px.line(equity_df, x='Date', y='Bankroll', 
+                         title='💰 Curva de Equidade (Crescimento do Capital)',
+                         color_discrete_sequence=['#00CC96'],
+                         labels=labels_pt)
+        fig_eq.add_hline(y=equity_df['Bankroll'].iloc[0], line_dash="dash", line_color="gray")
+        
+        # Gráfico 2: Drawdown (Área Vermelha)
+        fig_dd = px.area(equity_df, x='Date', y='Drawdown_Pct', 
+                         title='📉 Risco: Drawdown Histórico (Queda do Topo)',
+                         color_discrete_sequence=['#EF553B'],
+                         labels=labels_pt)
+        fig_dd.update_yaxes(autorange="reversed", tickformat=".1%") # Inverte eixo Y
+        
+        return fig_eq, fig_dd

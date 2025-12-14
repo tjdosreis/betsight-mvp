@@ -1,0 +1,6 @@
+🚀 CHECKLIST FINAL DO TECH MASTER
+
+Terminal: Você rodou pip install -r requirements.txt?
+Terminal: Você rodou python train_model.py? (Verifique se os arquivos .pkl apareceram na pasta).
+VS Code: Atualizou app.py e src/model.py?
+GitHub: CRUCIAL: O Git normal ignora arquivos .csv ou binários às vezes. Garanta que vamos enviar os arquivos gerados.

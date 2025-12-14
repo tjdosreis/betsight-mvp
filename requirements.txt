@@ -1,6 +1,7 @@
-pandas
-scikit-learn
 streamlit
+pandas
 numpy
-requests
+scikit-learn
 plotly
+requests
+joblib
